@@ -3,6 +3,7 @@
 items.csvを入力し、和名のPNG・可逆WebPをsprites/itemsへ、原画をrawへ出力する。
 前景のアルファ領域から正方形に切り出し、見かけの面積をそろえて96pxへ縮小する。
 細長い画像は長辺を94%以内に収め、切れを防ぐ。
+原画はReal-ESRGANで4倍化してから切り出し、同じ枠で384pxに整えたものをupscaled/へ保存する。
 """
 from __future__ import annotations
 
@@ -10,16 +11,21 @@ import argparse
 import io
 import math
 import re
+import tempfile
 from pathlib import Path
 
 from PIL import Image
 
 import common
+from realesrgan_tool import upscale_dir
 
 OUT_DIR = common.SPRITES_DIR / "items"
 RAW_DIR = OUT_DIR / "raw"
+UPSCALED_DIR = OUT_DIR / "upscaled"
 SPRITES_BASE = "https://www.serebii.net/itemdex/sprites"
 OUTPUT_SIZE = 96
+# 4倍化した原画(通常160px→640px)を同じ枠で切り出した大きめの出力。
+UPSCALED_OUTPUT_SIZE = 384
 ALPHA_MIN = 8
 TARGET_AREA_SIDE_FRACTION = 0.8
 MAX_LONG_SIDE_FRACTION = 0.94
@@ -46,13 +52,13 @@ def detect_alpha_bbox(im: Image.Image) -> tuple[int, int, int, int]:
     return bbox
 
 
-def build_normalized_icon(im: Image.Image) -> Image.Image:
-    """bbox 中心で正方形クロップし、96px へ一度だけ LANCZOS リサイズする。"""
+def build_normalized_icon(im: Image.Image, size: int = OUTPUT_SIZE) -> Image.Image:
+    """bbox 中心で正方形クロップし、size px へ一度だけ LANCZOS リサイズする。"""
     x0, y0, x1, y1 = detect_alpha_bbox(im)
     width, height = x1 - x0, y1 - y0
     side = max(math.sqrt(width * height) / TARGET_AREA_SIDE_FRACTION, max(width, height) / MAX_LONG_SIDE_FRACTION)
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    result = im.crop((round(cx - side / 2), round(cy - side / 2), round(cx + side / 2), round(cy + side / 2))).resize((OUTPUT_SIZE, OUTPUT_SIZE), Image.LANCZOS)
+    result = im.crop((round(cx - side / 2), round(cy - side / 2), round(cx + side / 2), round(cy + side / 2))).resize((size, size), Image.LANCZOS)
     alpha = result.getchannel("A")
     result.putalpha(alpha.point(lambda value: 0 if value < OUTPUT_ALPHA_MIN else value))
     return result
@@ -62,6 +68,32 @@ def raw_path(name: str) -> Path | None:
     """元の拡張子を問わず、既存の raw 原画を見つける。"""
     matches = sorted(RAW_DIR.glob(f"{common.to_filename(name)}.*"))
     return matches[0] if matches else None
+
+
+def upscaled_path(name: str) -> Path:
+    return UPSCALED_DIR / f"{common.to_filename(name)}.png"
+
+
+def outputs_exist(name: str) -> bool:
+    return common.outputs_exist(OUT_DIR, name) and upscaled_path(name).exists()
+
+
+def upscale_raws(raws: dict[str, Path], stage_dir: Path) -> dict[str, Path]:
+    """原画を Real-ESRGAN で 4 倍化し、名前ごとの出力パスを返す。失敗した名前は含めない。"""
+    if not raws:
+        return {}
+    print(f"Real-ESRGAN x4plus-anime でアップスケール中: {len(raws)} 件")
+    # ディレクトリ入力のため、対象だけを一時領域に置いて処理する。拡張子を問わず出力は PNG。
+    in_dir, out_dir = stage_dir / "in", stage_dir / "out"
+    in_dir.mkdir()
+    for name, raw in raws.items():
+        (in_dir / raw.name).write_bytes(raw.read_bytes())
+    try:
+        upscale_dir(in_dir, out_dir)
+    except Exception as exc:  # noqa: BLE001 - 出力がない画像は原画にフォールバックする
+        print(f"  [警告] Real-ESRGAN 実行に失敗しました: {exc}")
+    results = {name: out_dir / f"{raw.stem}.png" for name, raw in raws.items()}
+    return {name: path for name, path in results.items() if path.exists()}
 
 
 def extension_for(data: bytes) -> str:
@@ -131,12 +163,15 @@ def main() -> None:
     print(f"対象: {len(targets)} 件")
     failures: list[tuple[str, str]] = []
     generated = skipped = 0
+    # 段階1: 原画をそろえる(取得元は最終ログ用に控える)。
+    raws: dict[str, Path] = {}
+    sources: dict[str, str] = {}
     for number, (name, slug) in enumerate(targets, 1):
-        if not args.force and common.outputs_exist(OUT_DIR, name):
+        if not args.force and outputs_exist(name):
             skipped += 1
             continue
         raw = None if args.refetch else raw_path(name)
-        source = "raw"
+        sources[name] = "raw"
         if raw is None:
             source_url = HIGH_RES_SOURCE_URL.get(name)
             try:
@@ -150,23 +185,41 @@ def main() -> None:
                 print(f"[{number}/{len(targets)}] {name}: FAILED - 原画を取得できません")
                 continue
             raw = common.save_raw(resolved[0], RAW_DIR, name, extension_for(resolved[0]))
-            source = resolved[1]
-        try:
-            with Image.open(raw) as image:
-                result = build_normalized_icon(image.convert("RGBA"))
-            common.save_png_and_webp(result, OUT_DIR, name, webp_quality=None)
-            generated += 1
-            print(f"[{number}/{len(targets)}] {name}: OK ({source})")
-        except Exception as exc:  # noqa: BLE001 - 他の画像の処理を継続する
-            failures.append((name, str(exc)))
-            print(f"[{number}/{len(targets)}] {name}: FAILED - {exc}")
+            sources[name] = resolved[1]
+        raws[name] = raw
+    # 段階2: まとめてアップスケールし、同じ枠で 96px と 384px を切り出す。
+    fallbacks: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="items-upscale-") as stage_s:
+        upscaled = upscale_raws(raws, Path(stage_s))
+        for number, (name, _) in enumerate(targets, 1):
+            if name not in raws:
+                continue
+            source_path = upscaled.get(name)
+            if source_path is None:
+                # 4倍化の出力がない画像は原画から切り出す。
+                fallbacks.append(name)
+                source_path = raws[name]
+            try:
+                with Image.open(source_path) as image:
+                    rgba = image.convert("RGBA")
+                UPSCALED_DIR.mkdir(parents=True, exist_ok=True)
+                build_normalized_icon(rgba, UPSCALED_OUTPUT_SIZE).save(upscaled_path(name), "PNG", optimize=True)
+                common.save_png_and_webp(build_normalized_icon(rgba), OUT_DIR, name, webp_quality=None)
+                generated += 1
+                print(f"[{number}/{len(targets)}] {name}: OK ({sources[name]})")
+            except Exception as exc:  # noqa: BLE001 - 他の画像の処理を継続する
+                failures.append((name, str(exc)))
+                print(f"[{number}/{len(targets)}] {name}: FAILED - {exc}")
     print(f"完了: 生成 {generated} 件 / スキップ {skipped} 件 / 失敗 {len(failures)} 件")
     if failures:
         print("失敗一覧:")
         for name, reason in failures:
             print(f"  - {name}: {reason}")
+    if fallbacks:
+        print(f"Real-ESRGAN 原画フォールバック ({len(fallbacks)} 件): {', '.join(sorted(fallbacks))}")
     common.report(OUT_DIR, "items 出力")
     common.report(RAW_DIR, "items raw")
+    common.report(UPSCALED_DIR, "items upscaled")
 
 
 if __name__ == "__main__":
