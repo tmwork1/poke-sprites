@@ -22,7 +22,6 @@ import argparse
 import io
 import json
 import re
-import sys
 import tempfile
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -30,11 +29,10 @@ from pathlib import Path
 
 from PIL import Image
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from lib import common
+import common
 from realesrgan_tool import upscale_dir
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "sprites" / "pokemon-champion"
 RAW_DIR = OUT_DIR / "raw"
 UPSCALED_DIR = OUT_DIR / "upscaled"

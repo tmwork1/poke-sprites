@@ -9,13 +9,11 @@ from __future__ import annotations
 
 import argparse
 import io
-import sys
 from pathlib import Path
 
 from PIL import Image
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from lib import common
+import common
 
 OUT_DIR = common.SPRITES_DIR / "ui"
 RAW_DIR = OUT_DIR / "raw"

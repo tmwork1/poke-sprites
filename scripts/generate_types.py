@@ -116,11 +116,10 @@ except ImportError as exc:  # pragma: no cover
     )
     raise SystemExit(1) from exc
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from lib import common
+import common
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "sprites" / "types"
 TERA_OUT_DIR = REPO_ROOT / "sprites" / "tera-types"
 

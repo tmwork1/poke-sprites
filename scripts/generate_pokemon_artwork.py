@@ -19,17 +19,15 @@ from __future__ import annotations
 
 import argparse
 import io
-import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from PIL import Image
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from lib import common  # noqa: E402
+import common
 
 
-OUT_DIR = Path(__file__).resolve().parents[2] / "sprites" / "pokemon-artwork"
+OUT_DIR = Path(__file__).resolve().parents[1] / "sprites" / "pokemon-artwork"
 RAW_DIR = OUT_DIR / "raw"
 ARTWORK_URL = (
     "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/"

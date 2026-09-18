@@ -33,11 +33,11 @@ Python 3.13 と Pillow が必要です(`pip install -r requirements.txt`)。各�
 
 | コマンド | 生成するもの |
 |---|---|
-| `python scripts/pokemon-artwork/generate_pokemon_artwork.py` | ポケモン公式絵 |
-| `python scripts/pokemon-champion/generate_pokemon_champion.py` | ポケモン立ち絵(要 Vulkan 対応 GPU、初回に Real-ESRGAN を自動ダウンロード) |
-| `python scripts/items/generate_items.py` | アイテム |
-| `python scripts/types/generate_types.py` | タイプ・テラスタルタイプ |
-| `python scripts/ui/generate_ui.py` | テラスタル発動ボタン |
+| `python scripts/generate_pokemon_artwork.py` | ポケモン公式絵 |
+| `python scripts/generate_pokemon_champion.py` | ポケモン立ち絵(要 Vulkan 対応 GPU、初回に Real-ESRGAN を自動ダウンロード) |
+| `python scripts/generate_items.py` | アイテム |
+| `python scripts/generate_types.py` | タイプ・テラスタルタイプ |
+| `python scripts/generate_ui.py` | テラスタル発動ボタン |
 
 共通オプション:
 
@@ -50,5 +50,5 @@ Python 3.13 と Pillow が必要です(`pip install -r requirements.txt`)。各�
 ## 開発者向けメモ
 
 - 加工ロジックと定数は [poke-guide](../poke-guide) のスクリプトを移植したもので、実測に基づく設計理由は各スクリプトの docstring に残しています。
-- 共通処理(データ読み込み、リトライ付き取得、PNG+WebP 両出力、`--force`/`--names`)は `scripts/lib/common.py` にあります。
+- 共通処理(データ読み込み、リトライ付き取得、PNG+WebP 両出力、`--force`/`--names`)は `scripts/common.py` にあります。
 - `data/*.json` は poke-guide の master-data をコピーしたものです。
