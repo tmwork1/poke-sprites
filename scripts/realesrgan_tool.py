@@ -1,15 +1,8 @@
-"""Real-ESRGAN ncnn-vulkan executable helper.
+"""Real-ESRGAN ncnn-vulkan実行ファイルを取得・実行する補助モジュール。
 
-This is the poke-guide implementation used for Champions menu sprites.  The
-original 128px sprites need an anime-oriented four-times enlargement before
-they are reduced for display; generic image scaling left the small sprites
-visibly soft.  The Python Real-ESRGAN packages are not usable on the target
-Python 3.13 environment, so this helper downloads the upstream ncnn-vulkan
-release on first use and invokes it directly.
-
-The downloaded executable and its model files are cached in ``.cache/`` next
-to this file (and are gitignored).  Windows uses the Vulkan build, including
-on supported Intel integrated GPUs.
+初回実行時にOS別アーカイブを ``.cache/`` へダウンロードして展開する。
+指定ディレクトリ内の画像をアニメ向けモデルで4倍に拡大し、出力先へ保存する。
+Pythonパッケージに依存せず、配布済みの実行ファイルを直接利用する。
 """
 
 from __future__ import annotations
@@ -26,8 +19,7 @@ CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 RELEASE_TAG = "v0.2.5.0"
 RELEASE_DATE = "20220424"
 
-# xinntao/Real-ESRGAN の GitHub Releases が配布する OS ごとのアセット名。
-# 動作確認は Windows (Intel iGPU) のみ。macOS/Linux はアセット名が分かっている場合に限る。
+# OS別の配布アーカイブ名。
 _PLATFORM_ASSETS = {
     "Windows": f"realesrgan-ncnn-vulkan-{RELEASE_DATE}-windows.zip",
     "Darwin": f"realesrgan-ncnn-vulkan-{RELEASE_DATE}-macos.zip",
@@ -39,8 +31,7 @@ _PLATFORM_EXE = {
     "Linux": "realesrgan-ncnn-vulkan",
 }
 
-# アニメ塗り画像（セルシェーディングを含む）のため、汎用モデルではなくアニメ向けモデルを用いる。
-# 確認時点では -n の省略値が将来変更される可能性があるため明示する。
+# セル画調の画像の輪郭を保つため、アニメ向けモデルを明示する。
 MODEL = "realesrgan-x4plus-anime"
 SCALE = 4
 

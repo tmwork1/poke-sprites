@@ -1,18 +1,8 @@
-"""PokeAPI の公式アートワークを 320px WebP に加工して public/pokemon-artwork/ に配置する。
+"""公式ポケモンアートワークを320pxの画像へ加工する。
 
-このリポジトリ向けの変更: 入力は data/pokemon.json、出力は
-sprites/pokemon-artwork/、ファイル名は和名にする。原画は raw/ に保存し、PNG と
-WebP の両方を出力する。--force/--names に対応し、raw/ があれば再取得せず再生成する。
-
-元の設計理由: ダウンロード直後のファイルをそのまま置かない。
-ダウンロード後は 1KB 未満なので別ファイルでコンパクト化したが、公式アートワークは
-475x475 / 平均 45.8KB（執筆時点）である。1284 件すべてを置くと 178.6MB となり、
-Git にもデプロイにも重い。最大表示は 160px の Retina (2 倍) で十分なので 320px に
-LANCZOS で一回だけ縮小し、WebP quality 82 で保存する。quality 75 まで下げても
-節約できるサイズは小さく、公式アートワークは色数が多いため画質を優先する。
-
-raw.githubusercontent.com の Cache-Control は max-age=300 であり、全件を逐次取得
-すると DNS/TCP/TLS の待ち時間が支配的になる。そのため取得は 8 並列にする。
+pokemon.csvを入力し、和名のPNG・WebPをsprites/pokemon-artworkへ、原画をrawへ出力する。
+原画があれば再利用し、LANCZOSで一度だけ縮小してWebP品質82で保存する。
+最大160pxの2倍表示に合わせて320pxとし、取得待ちを抑えるため8並列で処理する。
 """
 
 from __future__ import annotations
@@ -34,15 +24,15 @@ ARTWORK_URL = (
     "other/official-artwork/{image_id}.png"
 )
 
-# /pokemon/[name] と /share/[slug] の 160px を Retina (2 倍) で表示するため 320px。
+# 最大160pxの2倍表示に合わせる。
 OUTPUT_SIZE = 320
-# q82 は 320px で平均 18.0KB/枚。q75 との差が小さいため公式絵の画質を優先する。
+# q82は平均18.0KB/枚で、q75との差が小さいため画質を優先する。
 WEBP_QUALITY = 82
 MAX_WORKERS = 8
 
 
 def raw_path(name: str) -> Path:
-    """共通の Windows 安全なファイル名規則で raw の保存先を返す。"""
+    """原画の保存先を安全なファイル名で返す。"""
     return RAW_DIR / f"{common.to_filename(name)}.png"
 
 
@@ -94,7 +84,7 @@ def main() -> None:
                 resized = image.convert("RGBA").resize((OUTPUT_SIZE, OUTPUT_SIZE), Image.LANCZOS)
             common.save_png_and_webp(resized, OUT_DIR, name, webp_quality=WEBP_QUALITY)
             return name, None, None
-        except Exception as err:  # noqa: BLE001 - 全件処理を継続して失敗一覧を出す
+        except Exception as err:  # noqa: BLE001 - 全件を処理して失敗一覧を出す
             return name, None, str(err)
 
     if targets:

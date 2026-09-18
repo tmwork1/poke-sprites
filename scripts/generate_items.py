@@ -1,17 +1,8 @@
-"""Serebii の高解像度アイテム画像を面積正規化して sprites/items/ に生成する。
+"""高解像度アイテム画像を正規化して生成する。
 
-この移植版は data/items.json を入力とし、和名ファイル名で sprites/items/
-へ PNG と lossless WebP を出力する。取得した無加工の原画は sprites/items/raw/
-に残すため、以後はネットワークなしで再生成できる。--force は加工済み出力だけを
-上書きし、原画も再取得する場合だけ --refetch を使う。
-
-PokeAPI の 30x30 原画はアイテムごとの見かけの大きさが大きく異なった。一方、
-Serebii の za/sv は 160x160 の高解像度原画を提供する。alpha>=8 の bbox で本体を
-検出し、幾何平均がキャンバスの 80% になる正方形にクロップする。細長い画像は
-長辺を 94% 以内にして切れを防ぐ。Pillow の RGBA crop は範囲外を透明で埋めるので
-クランプしない。最後に LANCZOS で一度だけ 96px にリサイズし、16 未満の alpha を
-捨ててリサンプル時の薄い縁を除去する。定数と加工ロジックは poke-guide の
-item-icons/generate_item_icons.py を踏襲している。
+items.csvを入力し、和名のPNG・可逆WebPをsprites/itemsへ、原画をrawへ出力する。
+前景のアルファ領域から正方形に切り出し、見かけの面積をそろえて96pxへ縮小する。
+細長い画像は長辺を94%以内に収め、切れを防ぐ。
 """
 from __future__ import annotations
 
@@ -35,18 +26,7 @@ MAX_LONG_SIDE_FRACTION = 0.94
 OUTPUT_ALPHA_MIN = 16
 LIST_PAGES = ["pokeball", "recovery", "holditem", "evolutionary", "berry", "gsberry", "battleeffect", "vitamins", "fossil", "mail", "miscellaneous", "keyitem", "eventitem", "decorations"]
 IMAGE_DIRS = ["za", "sv", ""]
-MANUAL_ENGLISH_SLUG: dict[str, str] = {
-    "\u30a6\u30a9\u30fc\u30bf\u30fc\u30e1\u30e2\u30ea": "water-memory",
-    "\u30d5\u30a1\u30a4\u30a2\u30fc\u30e1\u30e2\u30ea": "fire-memory",
-    "\u3053\u3046\u3066\u3064\u306e\u30d7\u30ec\u30fc\u30c8": "iron-plate",
-    "\u305f\u307e\u3080\u3057\u306e\u30d7\u30ec\u30fc\u30c8": "insect-plate",
-    "\u3082\u308a\u306e\u30d7\u30ec\u30fc\u30c8": "meadow-plate",
-    "\u30a2\u30d6\u30bd\u30eb\u30ca\u30a4\u30c8Z": "absolite",
-    "\u30ac\u30d6\u30ea\u30a2\u30b9\u30ca\u30a4\u30c8Z": "garchompite",
-}
-# Serebii のカテゴリ一覧ページから索引を引けず、ハイフン除去した spritePath とも一致しない
-# アイテムの実ファイル名(itemdex/sprites/ 配下)。2026-09-18 に heavy-duty-boots が
-# 一覧ページに載っておらず 404 になったため追加した。
+# 通常の索引と異なるSerebii上の画像名。
 SEREBII_STEM_OVERRIDES: dict[str, str] = {
     "heavy-duty-boots": "heavy-dutyboots",
 }
@@ -142,13 +122,8 @@ def main() -> None:
     parser.add_argument("--refetch", action="store_true", help="raw 原画も再取得する")
     args = parser.parse_args()
     entries = common.load_items()
-    # poke-guide と同じく、spritePath も既知の手動 slug もない項目は対象外にする。
-    # 現在は「ながねぎ」だけで、空 URL が返す透明画像を raw として保存しないためでもある。
-    targets = [
-        (entry["name"], slug)
-        for entry in entries
-        if entry.get("name") and (slug := entry.get("spritePath") or MANUAL_ENGLISH_SLUG.get(entry["name"]))
-    ]
+    # 空URLの透明画像を原画として保存しないため、slugなしは除外する。
+    targets = [(entry["name"], entry["slug"]) for entry in entries if entry["slug"]]
     names = common.filter_names(parser, args, [name for name, _ in targets])
     targets = [(name, slug) for name, slug in targets if name in set(names)]
     needs_network = any(args.refetch or raw_path(name) is None for name, _ in targets)
@@ -171,7 +146,7 @@ def main() -> None:
                 failures.append((name, str(exc)))
             if not resolved or resolved[0] is None:
                 if not any(item[0] == name for item in failures):
-                    failures.append((name, slug or "spritePath 不明"))
+                    failures.append((name, slug or "slug 不明"))
                 print(f"[{number}/{len(targets)}] {name}: FAILED - 原画を取得できません")
                 continue
             raw = common.save_raw(resolved[0], RAW_DIR, name, extension_for(resolved[0]))
@@ -182,7 +157,7 @@ def main() -> None:
             common.save_png_and_webp(result, OUT_DIR, name, webp_quality=None)
             generated += 1
             print(f"[{number}/{len(targets)}] {name}: OK ({source})")
-        except Exception as exc:  # noqa: BLE001 - other assets should continue
+        except Exception as exc:  # noqa: BLE001 - 他の画像の処理を継続する
             failures.append((name, str(exc)))
             print(f"[{number}/{len(targets)}] {name}: FAILED - {exc}")
     print(f"完了: 生成 {generated} 件 / スキップ {skipped} 件 / 失敗 {len(failures)} 件")

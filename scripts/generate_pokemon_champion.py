@@ -1,19 +1,9 @@
-"""Generate Pokémon Champions menu sprites from Bulbagarden.
+"""BulbagardenのChampionsメニュースプライトを生成する。
 
-This ports poke-guide's measured design: Bulbagarden's 128px Champions menu
-sprites are first enlarged four times with Real-ESRGAN ``x4plus-anime`` and
-then reduced once with LANCZOS to the display size.  This preserves sharper
-pixel edges than scaling the original sprite directly.  Bulbagarden category
-file names encode only a dex number and optional form suffix, so they are
-matched against the complete Pokémon master data by ``(dexNo, forme)``;
-``F → Female`` and ``Super → Jumbo`` are the two observed naming aliases.
-
-Changes for poke-sprites: inputs are ``data/pokemon.json`` and outputs are
-Japanese-name files under ``sprites/pokemon-champion/``.  Original downloads
-are retained in ``raw/`` and Real-ESRGAN results in ``upscaled/``.  Final
-320px assets are emitted as both PNG and lossless WebP.  ``--force`` replaces
-only final assets, ``--names`` filters Japanese names, and ``--refetch`` also
-refreshes raw downloads (and their derived upscale).
+``data/pokemon.csv`` とカテゴリ情報を図鑑番号・フォルムで照合し、
+日本語名のPNGと可逆WebPを ``sprites/pokemon-champion/`` に出力する。
+原画は ``raw/``、4倍アップスケール結果は ``upscaled/`` に保存する。
+輪郭を保つため、アニメ向けReal-ESRGANで4倍化してからLANCZOSで320pxへ縮小する。
 """
 
 from __future__ import annotations
@@ -37,9 +27,8 @@ OUT_DIR = REPO_ROOT / "sprites" / "pokemon-champion"
 RAW_DIR = OUT_DIR / "raw"
 UPSCALED_DIR = OUT_DIR / "upscaled"
 
-# The largest displayed menu sprite is 160px at retina 2x, hence a 320px
-# final asset.  This is deliberately the same one-pass LANCZOS reduction used
-# by poke-guide after the four-times Real-ESRGAN result.
+# 最大表示サイズ160pxの2倍解像度として320pxを出力する。
+# 4倍化後に一度だけLANCZOSで縮小し、ピクセルの輪郭を保つ。
 OUTPUT_SIZE = 320
 
 API_URL = "https://archives.bulbagarden.net/w/api.php"
@@ -53,7 +42,7 @@ MAX_WORKERS = 8
 
 
 def norm(value: str | None) -> str:
-    """Normalize suffixes so spacing, case, underscores, and hyphens match alike."""
+    """接尾辞を正規化し、表記ゆれを統一する。"""
     if not value:
         return ""
     collapsed = " ".join(value.strip().lower().replace("_", " ").replace("-", " ").split())
@@ -65,7 +54,7 @@ def aliased(value: str | None) -> str:
 
 
 def fetch_bulba_manifest() -> list[dict]:
-    """Fetch every category file as ``dexNo``, form suffix, URL, and title."""
+    """カテゴリ内の全ファイルから図鑑番号・接尾辞・URL・題名を取得する。"""
     entries: list[dict] = []
     params = {
         "action": "query",
@@ -120,7 +109,7 @@ def upscaled_path(name: str) -> Path:
 
 
 def read_rgba(path: Path) -> Image.Image:
-    """Load eagerly so the source handle can be closed before writing output."""
+    """書き出し前にファイルを閉じられるよう、RGBA画像を即時読み込みする。"""
     with Image.open(path) as source:
         return source.convert("RGBA")
 
@@ -165,12 +154,12 @@ def main() -> None:
                 payload = common.fetch(hit["url"])
                 if payload is None:
                     raise RuntimeError("404")
-                # Validate before replacing a retained raw image with an error page.
+                # エラーページで既存の原画を上書きしないよう、保存前に検証する。
                 read_rgba_from_bytes = Image.open(io.BytesIO(payload))
                 read_rgba_from_bytes.verify()
                 common.save_raw(payload, RAW_DIR, name)
                 return name, None
-            except Exception as err:  # network and image errors are per asset
+            except Exception as err:  # ネットワーク・画像エラーは個別に記録する。
                 return name, str(err)
 
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
@@ -187,7 +176,7 @@ def main() -> None:
     else:
         print("原画取得: すべて raw/ に存在するためスキップ")
 
-    # ``--refetch`` means a newly downloaded raw invalidates its derived image.
+    # ``--refetch`` で再取得した原画は加工済み画像を作り直す。
     upscale_targets = [
         entry["name"] for entry, _ in matched
         if entry["name"] not in failed
@@ -196,21 +185,18 @@ def main() -> None:
     ]
     if upscale_targets:
         print(f"Real-ESRGAN x4plus-anime でアップスケール中: {len(upscale_targets)} 件")
-        # The upstream command accepts directories, so stage only missing items
-        # as inputs.  Its output is nevertheless written directly and durably
-        # to ``upscaled/``; existing upscaled files are never reprocessed.
+        # ディレクトリ入力のため対象だけを一時領域に置き、既存結果の再処理を避ける。
         with tempfile.TemporaryDirectory(prefix="champion-upscale-input-") as stage_s:
             stage = Path(stage_s)
             for name in upscale_targets:
                 (stage / raw_path(name).name).write_bytes(raw_path(name).read_bytes())
             try:
                 upscale_dir(stage, UPSCALED_DIR)
-            except Exception as err:  # report individual missing output below
+            except Exception as err:  # 出力がない画像は後で個別に報告する。
                 print(f"失敗: Real-ESRGAN 実行: {err}")
             for name in upscale_targets:
                 if not upscaled_path(name).exists():
-                    # Keep poke-guide's per-file fallback: a missing result
-                    # does not discard an otherwise valid raw download.
+                    # 有効な原画を活かすため、出力がない画像は原画を縮小する。
                     upscale_fallbacks.append(name)
                     print(f"警告: {name} のアップスケール出力がないため原画で縮小します")
     else:
@@ -227,8 +213,7 @@ def main() -> None:
             continue
         source = upscaled_path(name)
         if not source.exists():
-            # Preserve poke-guide's fallback behavior for a missing individual
-            # Real-ESRGAN result.
+            # アップスケール結果がない場合は原画を縮小する。
             source = raw_path(name)
         if not source.exists():
             failed.append(name)
