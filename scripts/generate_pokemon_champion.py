@@ -2,8 +2,7 @@
 
 ``data/pokemon.csv`` とカテゴリ情報を図鑑番号・フォルムで照合し、
 日本語名のPNGと可逆WebPを ``sprites/pokemon-champion/`` に出力する。
-原画は ``raw/``、4倍アップスケール結果は ``upscaled/`` に保存する。
-輪郭を保つため、アニメ向けReal-ESRGANで4倍化してからLANCZOSで320pxへ縮小する。
+原画は ``raw/`` に保存し、アニメ向けReal-ESRGANで4倍化(512px)したものをそのまま ``png/`` と ``webp/`` に出力する。
 """
 
 from __future__ import annotations
@@ -25,11 +24,10 @@ from realesrgan_tool import upscale_dir
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "sprites" / "pokemon-champion"
 RAW_DIR = OUT_DIR / "raw"
-UPSCALED_DIR = OUT_DIR / "upscaled"
 
-# 最大表示サイズ160pxの2倍解像度として320pxを出力する。
-# 4倍化後に一度だけLANCZOSで縮小し、ピクセルの輪郭を保つ。
-OUTPUT_SIZE = 320
+# 原画128pxをReal-ESRGANで4倍化した512pxをそのまま出力する。
+# Real-ESRGANが使えない場合はLANCZOSで同サイズに拡大して揃える。
+OUTPUT_SIZE = 512
 
 API_URL = "https://archives.bulbagarden.net/w/api.php"
 CATEGORY_TITLE = "Category:Champions_menu_sprites"
@@ -104,10 +102,6 @@ def raw_path(name: str) -> Path:
     return RAW_DIR / f"{common.to_filename(name)}.png"
 
 
-def upscaled_path(name: str) -> Path:
-    return UPSCALED_DIR / f"{common.to_filename(name)}.png"
-
-
 def read_rgba(path: Path) -> Image.Image:
     """書き出し前にファイルを閉じられるよう、RGBA画像を即時読み込みする。"""
     with Image.open(path) as source:
@@ -177,55 +171,48 @@ def main() -> None:
         print("原画取得: すべて raw/ に存在するためスキップ")
 
     # ``--refetch`` で再取得した原画は加工済み画像を作り直す。
-    upscale_targets = [
-        entry["name"] for entry, _ in matched
-        if entry["name"] not in failed
-        and raw_path(entry["name"]).exists()
-        and (args.refetch and entry["name"] in fetched or not upscaled_path(entry["name"]).exists())
-    ]
-    if upscale_targets:
-        print(f"Real-ESRGAN x4plus-anime でアップスケール中: {len(upscale_targets)} 件")
-        # ディレクトリ入力のため対象だけを一時領域に置き、既存結果の再処理を避ける。
-        with tempfile.TemporaryDirectory(prefix="champion-upscale-input-") as stage_s:
-            stage = Path(stage_s)
-            for name in upscale_targets:
-                (stage / raw_path(name).name).write_bytes(raw_path(name).read_bytes())
-            try:
-                upscale_dir(stage, UPSCALED_DIR)
-            except Exception as err:  # 出力がない画像は後で個別に報告する。
-                print(f"失敗: Real-ESRGAN 実行: {err}")
-            for name in upscale_targets:
-                if not upscaled_path(name).exists():
-                    # 有効な原画を活かすため、出力がない画像は原画を縮小する。
-                    upscale_fallbacks.append(name)
-                    print(f"警告: {name} のアップスケール出力がないため原画で縮小します")
-    else:
-        print("アップスケール: すべて upscaled/ に存在するためスキップ")
-
-    generated = 0
+    targets: list[str] = []
     skipped = 0
     for entry, _ in matched:
         name = entry["name"]
-        if name in failed:
+        if name in failed or not raw_path(name).exists():
             continue
-        if not args.force and common.outputs_exist(OUT_DIR, name):
+        if args.force or name in fetched or not common.outputs_exist(OUT_DIR, name):
+            targets.append(name)
+        else:
             skipped += 1
-            continue
-        source = upscaled_path(name)
-        if not source.exists():
-            # アップスケール結果がない場合は原画を縮小する。
-            source = raw_path(name)
-        if not source.exists():
-            failed.append(name)
-            print(f"失敗: {name} の加工元がありません")
-            continue
-        image = read_rgba(source).resize((OUTPUT_SIZE, OUTPUT_SIZE), Image.LANCZOS)
-        common.save_png_and_webp(image, OUT_DIR, name, webp_quality=None)
-        generated += 1
+
+    generated = 0
+    if targets:
+        print(f"Real-ESRGAN x4plus-anime でアップスケール中: {len(targets)} 件")
+        # ディレクトリ入力のため対象だけを一時領域に置き、既存結果の再処理を避ける。
+        with tempfile.TemporaryDirectory(prefix="champion-upscale-") as stage_s:
+            stage = Path(stage_s)
+            in_dir, out_dir = stage / "in", stage / "out"
+            in_dir.mkdir()
+            for name in targets:
+                (in_dir / raw_path(name).name).write_bytes(raw_path(name).read_bytes())
+            try:
+                upscale_dir(in_dir, out_dir)
+            except Exception as err:  # 出力がない画像は後で個別に報告する。
+                print(f"失敗: Real-ESRGAN 実行: {err}")
+            for name in targets:
+                source = out_dir / raw_path(name).name
+                if not source.exists():
+                    # 有効な原画を活かすため、出力がない画像は原画を拡大する。
+                    upscale_fallbacks.append(name)
+                    print(f"警告: {name} のアップスケール出力がないため原画を拡大します")
+                    source = raw_path(name)
+                image = read_rgba(source)
+                if image.size != (OUTPUT_SIZE, OUTPUT_SIZE):
+                    image = image.resize((OUTPUT_SIZE, OUTPUT_SIZE), Image.LANCZOS)
+                common.save_png_and_webp(image, OUT_DIR, name, webp_quality=None)
+                generated += 1
+    else:
+        print("アップスケール: すべて png/ と webp/ に存在するためスキップ")
 
     print(f"最終出力: 生成 {generated} 件 / 既存スキップ {skipped} 件")
     common.report(RAW_DIR, "raw/")
-    common.report(UPSCALED_DIR, "upscaled/")
     common.report(OUT_DIR, "pokemon-champion/")
     if failed:
         print(f"失敗一覧 ({len(set(failed))} 件): {', '.join(sorted(set(failed)))}")

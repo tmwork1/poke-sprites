@@ -9,12 +9,12 @@
 - `png/` … 加工済み PNG
 - `webp/` … 加工済み WebP(`png/` と同じ内容)
 - `raw/` … 入手元から取得したままの原画
-- `upscaled/` … 立ち絵とアイテムのみ。Real-ESRGAN で拡大した大きめの画像(`png/` と同じ構図)
+- `upscaled/` … アイテムのみ。Real-ESRGAN で拡大した大きめの画像(`png/` と同じ構図)
 
 | 種類 | パス | サイズ | 内容 | 入手元 |
 |---|---|---|---|---|
 | ポケモン公式絵 | `sprites/pokemon-artwork/png/{和名}.png` | 320px | 1292 種(全フォルム) | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) official-artwork |
-| ポケモン立ち絵 | `sprites/pokemon-champion/png/{和名}.png` | 320px | Pokémon Champions 実装済みの 350 種(`upscaled/` は 512px) | [Bulbagarden Archives](https://archives.bulbagarden.net/wiki/Category:Champions_menu_sprites) を Real-ESRGAN で 4 倍拡大 |
+| ポケモン立ち絵 | `sprites/pokemon-champion/png/{和名}.png` | 512px | Pokémon Champions 実装済みの 350 種 | [Bulbagarden Archives](https://archives.bulbagarden.net/wiki/Category:Champions_menu_sprites) を Real-ESRGAN で 4 倍拡大 |
 | アイテム | `sprites/items/png/{和名}.png` | 96px | 対戦で使う 272 種(絵柄の大きさを揃えて正規化済み。`upscaled/` は 384px) | [serebii.net](https://www.serebii.net/itemdex/) を Real-ESRGAN で 4 倍拡大 |
 | タイプ | `sprites/types/png/{和名}.png` | 96px | 19 種(ステラ含む)、円形 | PokeAPI/sprites (SV タイプバッジ) |
 | テラスタルタイプ | `sprites/tera-types/png/{和名}.png` | 96px | 19 種、正方形 | PokeAPI/sprites (SV テラスタルアイコン) |
