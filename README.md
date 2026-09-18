@@ -4,18 +4,18 @@
 
 ## 画像一覧
 
-ファイル名はすべて**和名**です(例: `sprites/items/たべのこし.png`)。加工済み画像は同じ場所に **PNG と WebP の両方**があります。
+ファイル名はすべて**和名**です(例: `sprites/items/たべのこし.png`)。表のパスは `.png` で示していますが、加工済み画像は同じ場所に同名の **`.webp` もあります**(`raw/` と `upscaled/` は PNG のみ)。
 
 | 種類 | パス | サイズ | 内容 | 入手元 |
 |---|---|---|---|---|
-| ポケモン公式絵 | `sprites/pokemon-artwork/{和名}.png/.webp` | 320px | 1292 種(全フォルム) | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) official-artwork |
-| ポケモン立ち絵 | `sprites/pokemon-champion/{和名}.png/.webp` | 320px | Pokémon Champions 実装済みの約 350 種 | [Bulbagarden Archives](https://archives.bulbagarden.net/wiki/Category:Champions_menu_sprites) を Real-ESRGAN で 4 倍拡大 |
-| 〃 中サイズ | `sprites/pokemon-champion/medium/{和名}.png/.webp` | 192px | 上記の縮小版 | 〃 |
-| 〃 アイコン | `sprites/pokemon-champion/icon/{和名}.png/.webp` | 96px | 上記の縮小版 | 〃 |
-| アイテム | `sprites/items/{和名}.png/.webp` | 96px | 対戦で使う 272 種(絵柄の大きさを揃えて正規化済み) | [serebii.net](https://www.serebii.net/itemdex/) |
-| タイプ | `sprites/types/{和名}.png/.webp` | 96px | 19 種(ステラ含む)、円形 | PokeAPI/sprites (SV タイプバッジ) |
-| テラスタルタイプ | `sprites/tera-types/{和名}.png/.webp` | 96px | 19 種、正方形 | PokeAPI/sprites (SV テラスタルアイコン) |
-| テラスタル発動ボタン | `sprites/ui/テラスタル.png/.webp` | 原寸 | 1 枚 | GameWith |
+| ポケモン公式絵 | `sprites/pokemon-artwork/{和名}.png` | 320px | 1292 種(全フォルム) | [PokeAPI/sprites](https://github.com/PokeAPI/sprites) official-artwork |
+| ポケモン立ち絵 | `sprites/pokemon-champion/{和名}.png` | 320px | Pokémon Champions 実装済みの約 350 種 | [Bulbagarden Archives](https://archives.bulbagarden.net/wiki/Category:Champions_menu_sprites) を Real-ESRGAN で 4 倍拡大 |
+| 〃 中サイズ | `sprites/pokemon-champion/medium/{和名}.png` | 192px | 上記の縮小版 | 〃 |
+| 〃 アイコン | `sprites/pokemon-champion/icon/{和名}.png` | 96px | 上記の縮小版 | 〃 |
+| アイテム | `sprites/items/{和名}.png` | 96px | 対戦で使う 272 種(絵柄の大きさを揃えて正規化済み) | [serebii.net](https://www.serebii.net/itemdex/) |
+| タイプ | `sprites/types/{和名}.png` | 96px | 19 種(ステラ含む)、円形 | PokeAPI/sprites (SV タイプバッジ) |
+| テラスタルタイプ | `sprites/tera-types/{和名}.png` | 96px | 19 種、正方形 | PokeAPI/sprites (SV テラスタルアイコン) |
+| テラスタル発動ボタン | `sprites/ui/テラスタル.png` | 原寸 | 1 枚 | GameWith |
 | 原画 | 各カテゴリの `raw/{和名}.png` | 原寸 | 入手元から取得したままの無加工画像 | 〃 |
 | 立ち絵の拡大原寸 | `sprites/pokemon-champion/upscaled/{和名}.png` | 512px | Real-ESRGAN 出力(縮小前) | 〃 |
 
