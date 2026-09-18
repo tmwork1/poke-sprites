@@ -76,15 +76,16 @@ def save_raw(data: bytes, out_dir: Path, name: str, ext: str = "png") -> Path:
 def save_png_and_webp(
     im: Image.Image, out_dir: Path, name: str, *, webp_quality: int | None = None
 ) -> tuple[Path, Path]:
-    """加工済み画像を {name}.png と {name}.webp の両方で保存する。
+    """加工済み画像を out_dir/png/{name}.png と out_dir/webp/{name}.webp の両方で保存する。
 
     webp_quality が None なら lossless WebP、整数なら lossy(quality 指定)。
     """
-    out_dir.mkdir(parents=True, exist_ok=True)
     stem = to_filename(name)
     im = im.convert("RGBA")
-    png_path = out_dir / f"{stem}.png"
-    webp_path = out_dir / f"{stem}.webp"
+    png_path = out_dir / "png" / f"{stem}.png"
+    webp_path = out_dir / "webp" / f"{stem}.webp"
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+    webp_path.parent.mkdir(parents=True, exist_ok=True)
     im.save(png_path, "PNG", optimize=True)
     if webp_quality is None:
         im.save(webp_path, "WEBP", lossless=True, quality=100, method=6)
@@ -114,12 +115,12 @@ def filter_names(parser: argparse.ArgumentParser, args: argparse.Namespace, know
 
 
 def outputs_exist(out_dir: Path, name: str) -> bool:
-    """PNG と WebP の両方が既にあれば True。"""
+    """out_dir/png/ と out_dir/webp/ の両方に既にあれば True。"""
     stem = to_filename(name)
-    return (out_dir / f"{stem}.png").exists() and (out_dir / f"{stem}.webp").exists()
+    return (out_dir / "png" / f"{stem}.png").exists() and (out_dir / "webp" / f"{stem}.webp").exists()
 
 
 def report(out_dir: Path, label: str) -> None:
-    files = sorted(p for p in out_dir.glob("*") if p.is_file())
+    files = sorted(p for p in out_dir.rglob("*") if p.is_file())
     total = sum(p.stat().st_size for p in files)
     print(f"{label}: {len(files)} ファイル / {total / 1024 / 1024:.2f} MB")
